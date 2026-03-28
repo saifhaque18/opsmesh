@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.opsmesh.api.deps import AnalystUser, CurrentUser
 from src.opsmesh.core.database import get_db
 from src.opsmesh.models.cluster import ClusterStatus, IncidentCluster
 from src.opsmesh.models.incident import Incident
@@ -24,6 +25,7 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 @router.get("", response_model=ClusterListResponse)
 async def list_clusters(
     db: DB,
+    user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status: ClusterStatus | None = None,
@@ -62,7 +64,7 @@ async def list_clusters(
 
 
 @router.get("/stats", response_model=ClusterStats)
-async def get_cluster_stats(db: DB):
+async def get_cluster_stats(db: DB, user: CurrentUser):
     """Get clustering summary statistics."""
     # Total clusters
     total = (
@@ -106,7 +108,7 @@ async def get_cluster_stats(db: DB):
 
 
 @router.get("/{cluster_id}", response_model=ClusterDetailResponse)
-async def get_cluster(cluster_id: uuid.UUID, db: DB):
+async def get_cluster(cluster_id: uuid.UUID, db: DB, user: CurrentUser):
     """Get a cluster with all its incidents."""
     result = await db.execute(
         select(IncidentCluster).where(IncidentCluster.id == cluster_id)
@@ -118,7 +120,7 @@ async def get_cluster(cluster_id: uuid.UUID, db: DB):
 
 
 @router.patch("/{cluster_id}/resolve")
-async def resolve_cluster(cluster_id: uuid.UUID, db: DB):
+async def resolve_cluster(cluster_id: uuid.UUID, db: DB, user: AnalystUser):
     """Mark a cluster as resolved."""
     result = await db.execute(
         select(IncidentCluster).where(IncidentCluster.id == cluster_id)

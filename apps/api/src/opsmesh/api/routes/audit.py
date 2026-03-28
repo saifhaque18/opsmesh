@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.opsmesh.api.deps import CurrentUser
 from src.opsmesh.core.database import get_db
 from src.opsmesh.models.event import EventType, TimelineEvent
 
@@ -42,6 +43,7 @@ class AuditLogResponse:
 @router.get("")
 async def get_audit_log(
     db: DB,
+    user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     event_type: str | None = None,
@@ -120,7 +122,7 @@ async def get_audit_log(
 
 
 @router.get("/event-types")
-async def get_event_types():
+async def get_event_types(user: CurrentUser):
     """Get all available event types."""
     return {
         "event_types": [
@@ -133,6 +135,7 @@ async def get_event_types():
 @router.get("/stats")
 async def get_audit_stats(
     db: DB,
+    user: CurrentUser,
     from_date: datetime | None = None,
     to_date: datetime | None = None,
 ):

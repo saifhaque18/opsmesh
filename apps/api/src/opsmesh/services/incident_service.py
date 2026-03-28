@@ -20,7 +20,12 @@ class IncidentService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, data: IncidentCreate, auto_enqueue: bool = True) -> Incident:
+    async def create(
+        self,
+        data: IncidentCreate,
+        auto_enqueue: bool = True,
+        actor: str | None = None,
+    ) -> Incident:
         incident = Incident(
             **data.model_dump(exclude_unset=True),
             detected_at=data.detected_at or datetime.now(UTC),
@@ -35,7 +40,8 @@ class IncidentService:
             db=self.db,
             incident_id=incident.id,
             event_type=EventType.CREATED,
-            summary=f"Incident created from {incident.source}",
+            summary=f"Incident created by {actor or 'system'}",
+            actor=actor,
             metadata={
                 "title": incident.title,
                 "source": incident.source,

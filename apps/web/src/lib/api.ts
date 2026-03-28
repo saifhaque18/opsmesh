@@ -361,4 +361,55 @@ export async function addIncidentNote(
   return data;
 }
 
+// Auth types
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "analyst" | "viewer";
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  user: AuthUser;
+}
+
+// Auth API functions
+export async function login(
+  email: string,
+  password: string
+): Promise<AuthTokens> {
+  const { data } = await api.post("/api/v1/auth/login", { email, password });
+  return data;
+}
+
+export async function register(payload: {
+  email: string;
+  name: string;
+  password: string;
+}): Promise<AuthTokens> {
+  const { data } = await api.post("/api/v1/auth/register", payload);
+  return data;
+}
+
+export async function refreshTokens(
+  refreshToken: string
+): Promise<AuthTokens> {
+  const { data } = await api.post("/api/v1/auth/refresh", {
+    refresh_token: refreshToken,
+  });
+  return data;
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const { data } = await api.get("/api/v1/users/me");
+  return data;
+}
+
 export default api;

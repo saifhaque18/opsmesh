@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.opsmesh.api.deps import AnalystUser, CurrentUser
 from src.opsmesh.core.database import get_db
 from src.opsmesh.models.ai_trace import AITrace
 from src.opsmesh.models.event import EventType
@@ -40,16 +41,17 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 
 
 @router.post("", response_model=IncidentResponse, status_code=201)
-async def create_incident(data: IncidentCreate, db: DB):
+async def create_incident(data: IncidentCreate, db: DB, user: AnalystUser):
     """Ingest a new incident."""
     service = IncidentService(db)
-    incident = await service.create(data)
+    incident = await service.create(data, actor=user.email)
     return incident
 
 
 @router.get("", response_model=IncidentListResponse)
 async def list_incidents(
     db: DB,
+    user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status: IncidentStatus | None = None,
@@ -82,7 +84,7 @@ async def list_incidents(
 
 
 @router.get("/stats", response_model=IncidentStats)
-async def get_incident_stats(db: DB):
+async def get_incident_stats(db: DB, user: CurrentUser):
     """Get dashboard summary statistics."""
     svc = IncidentService(db)
     stats = await svc.get_stats()
@@ -90,7 +92,7 @@ async def get_incident_stats(db: DB):
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)
-async def get_incident(incident_id: uuid.UUID, db: DB):
+async def get_incident(incident_id: uuid.UUID, db: DB, user: CurrentUser):
     """Get a single incident by ID."""
     svc = IncidentService(db)
     incident = await svc.get_by_id(incident_id)
@@ -100,17 +102,19 @@ async def get_incident(incident_id: uuid.UUID, db: DB):
 
 
 @router.patch("/{incident_id}", response_model=IncidentResponse)
-async def update_incident(incident_id: uuid.UUID, data: IncidentUpdate, db: DB):
+async def update_incident(
+    incident_id: uuid.UUID, data: IncidentUpdate, db: DB, user: AnalystUser
+):
     """Update an incident."""
     svc = IncidentService(db)
-    incident = await svc.update(incident_id, data)
+    incident = await svc.update(incident_id, data, actor=user.email)
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident
 
 
 @router.delete("/{incident_id}", status_code=204)
-async def delete_incident(incident_id: uuid.UUID, db: DB):
+async def delete_incident(incident_id: uuid.UUID, db: DB, user: AnalystUser):
     """Delete an incident."""
     svc = IncidentService(db)
     deleted = await svc.delete(incident_id)
@@ -119,13 +123,13 @@ async def delete_incident(incident_id: uuid.UUID, db: DB):
 
 
 @router.get("/pipeline/stats")
-async def get_pipeline_stats():
+async def get_pipeline_stats(user: CurrentUser):
     """Get pipeline queue statistics."""
     return get_queue_stats()
 
 
 @router.get("/{incident_id}/job")
-async def get_incident_job_status(incident_id: uuid.UUID):
+async def get_incident_job_status(incident_id: uuid.UUID, user: CurrentUser):
     """Get the processing job status for an incident."""
     status = get_job_status(str(incident_id))
     if not status:
@@ -134,7 +138,7 @@ async def get_incident_job_status(incident_id: uuid.UUID):
 
 
 @router.post("/{incident_id}/reprocess")
-async def reprocess_incident(incident_id: uuid.UUID, db: DB):
+async def reprocess_incident(incident_id: uuid.UUID, db: DB, user: AnalystUser):
     """Re-enqueue an incident for reprocessing."""
     svc = IncidentService(db)
     incident = await svc.get_by_id(incident_id)
@@ -162,7 +166,7 @@ async def override_severity(
     incident_id: uuid.UUID,
     data: SeverityOverrideRequest,
     db: DB,
-    user_email: str = "analyst@example.com",  # TODO: Replace with auth user
+    user: AnalystUser,
 ):
     """Manually override an incident's severity score."""
     from sqlalchemy import select
@@ -201,7 +205,7 @@ async def override_severity(
                 severity_label=severity_label,
                 source="manual",
                 previous_score=previous_score,
-                scored_by=user_email,
+                scored_by=user.email,
                 override_reason=data.reason,
             )
             sync_db.commit()
@@ -217,7 +221,7 @@ async def override_severity(
         incident_id=incident_id,
         event_type=EventType.SEVERITY_OVERRIDDEN,
         summary=f"Severity overridden: {previous_score:.2f} → {data.score:.2f}",
-        actor=user_email,
+        actor=user.email,
         metadata={
             "previous_score": previous_score,
             "new_score": data.score,
@@ -232,7 +236,7 @@ async def override_severity(
 
 
 @router.get("/{incident_id}/score-history", response_model=ScoreHistoryListResponse)
-async def get_score_history(incident_id: uuid.UUID, db: DB):
+async def get_score_history(incident_id: uuid.UUID, db: DB, user: CurrentUser):
     """Get the score history for an incident."""
     from sqlalchemy import select
 
@@ -260,7 +264,7 @@ async def get_score_history(incident_id: uuid.UUID, db: DB):
 
 
 @router.get("/{incident_id}/scoring", response_model=ScoringExplanationResponse)
-async def get_scoring_explanation(incident_id: uuid.UUID, db: DB):
+async def get_scoring_explanation(incident_id: uuid.UUID, db: DB, user: CurrentUser):
     """Get the current scoring breakdown for an incident."""
     from sqlalchemy import select
 
@@ -306,7 +310,7 @@ async def get_scoring_explanation(incident_id: uuid.UUID, db: DB):
 
 
 @router.get("/{incident_id}/ai-analysis", response_model=AIAnalysisResponse)
-async def get_ai_analysis(incident_id: uuid.UUID, db: DB):
+async def get_ai_analysis(incident_id: uuid.UUID, db: DB, user: CurrentUser):
     """Get AI analysis results for an incident."""
     import json
 
@@ -366,7 +370,7 @@ async def get_ai_analysis(incident_id: uuid.UUID, db: DB):
 
 @router.post("/{incident_id}/ai-review")
 async def review_ai_analysis(
-    incident_id: uuid.UUID, review: AIReviewRequest, db: DB
+    incident_id: uuid.UUID, review: AIReviewRequest, db: DB, user: AnalystUser
 ):
     """Submit a human review of AI suggestions."""
     import json
@@ -421,8 +425,8 @@ async def review_ai_analysis(
         db=db,
         incident_id=incident_id,
         event_type=EventType.AI_REVIEW_SUBMITTED,
-        summary=f"AI analysis {review.rating} by {review.reviewed_by}",
-        actor=review.reviewed_by,
+        summary=f"AI analysis {review.rating} by {user.email}",
+        actor=user.email,
         metadata={
             "rating": review.rating,
             "feedback": review.feedback,
@@ -443,7 +447,7 @@ async def review_ai_analysis(
 
 
 @router.post("/{incident_id}/notes", response_model=NoteResponse, status_code=201)
-async def add_note(incident_id: uuid.UUID, note: NoteCreate, db: DB):
+async def add_note(incident_id: uuid.UUID, note: NoteCreate, db: DB, user: AnalystUser):
     """Add a note to an incident."""
     from sqlalchemy import select
 
@@ -455,14 +459,14 @@ async def add_note(incident_id: uuid.UUID, note: NoteCreate, db: DB):
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    # Create the note as a timeline event
+    # Create the note as a timeline event (use authenticated user as actor)
     event = await emit_event_async(
         db=db,
         incident_id=incident_id,
         event_type=EventType.NOTE_ADDED,
-        summary=f"Note added by {note.author}",
+        summary=f"Note added by {user.email}",
         detail=note.content,
-        actor=note.author,
+        actor=user.email,
     )
 
     await db.commit()
@@ -470,7 +474,7 @@ async def add_note(incident_id: uuid.UUID, note: NoteCreate, db: DB):
     return NoteResponse(
         id=event.id,
         content=note.content,
-        author=note.author,
+        author=user.email,
         created_at=event.occurred_at,
     )
 
@@ -482,6 +486,7 @@ async def add_note(incident_id: uuid.UUID, note: NoteCreate, db: DB):
 async def get_incident_timeline(
     incident_id: uuid.UUID,
     db: DB,
+    user: CurrentUser,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):

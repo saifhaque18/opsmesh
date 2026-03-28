@@ -1,12 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { StatsCards } from "@/components/stats-cards";
 import { IncidentTable } from "@/components/incident-table";
 import { ClusterList } from "@/components/cluster-list";
+import { useAuth } from "@/lib/auth-context";
+
+const roleColors: Record<string, string> = {
+  admin: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  analyst: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  viewer: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+};
 
 export default function Dashboard() {
+  const router = useRouter();
+  const { user, logout, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<"incidents" | "clusters">("incidents");
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -21,11 +41,30 @@ export default function Dashboard() {
               OpsMesh
             </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
               System healthy
             </span>
+            {/* User menu */}
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {user?.name}
+                </p>
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${roleColors[user?.role || "viewer"]}`}
+                >
+                  {user?.role}
+                </span>
+              </div>
+              <button
+                onClick={logout}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
       </header>

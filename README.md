@@ -67,7 +67,7 @@ Modern operations teams are overwhelmed by alert noise. OpsMesh reduces cognitiv
 | **Queue/Cache** | Redis 7 |
 | **Workers** | RQ (Redis Queue) |
 | **AI** | OpenAI-compatible API abstraction |
-| **Auth** | Clerk / Auth.js (planned) |
+| **Auth** | JWT (access + refresh tokens), bcrypt, RBAC |
 | **Observability** | OpenTelemetry, Prometheus/Grafana (planned) |
 | **Infrastructure** | Docker, GitHub Actions |
 | **Deployment** | Vercel (frontend), Railway/Render/Fly.io (backend) |
@@ -85,19 +85,19 @@ Modern operations teams are overwhelmed by alert noise. OpsMesh reduces cognitiv
 - [x] Worker pipeline with RQ
 - [x] Cluster API (list, detail, stats, resolve)
 - [x] Dashboard tabs (Incidents / Clusters)
-- [ ] AI-generated response suggestions
-- [ ] Incident timeline
+- [x] AI-generated response suggestions
+- [x] Incident timeline
 - [x] Search and filtering
-- [ ] Basic authentication
-- [ ] Audit logging
+- [x] JWT authentication (access + refresh tokens)
+- [x] Role-based access control (admin/analyst/viewer)
+- [x] Audit logging
 - [x] Dockerized local development
-- [x] Test suite (59 tests)
+- [x] Test suite (179 tests)
 - [x] CI/CD pipeline
 
 ### v2 (Planned)
 - [ ] Slack/email alerting
 - [ ] Multi-tenant support
-- [ ] Role-based access control
 - [ ] Cost/latency dashboard
 - [ ] LLM fallback routing
 - [ ] Benchmark/evaluation panel
@@ -156,14 +156,14 @@ GET /health
 # Response: { "status": "healthy", "service": "opsmesh-api" }
 ```
 
-### Incidents
+### Incidents (requires auth)
 ```bash
 GET    /api/v1/incidents               # List incidents (with filters)
 POST   /api/v1/incidents               # Create incident (auto-queued)
 GET    /api/v1/incidents/stats         # Dashboard statistics
 GET    /api/v1/incidents/{id}          # Get incident details
-PATCH  /api/v1/incidents/{id}          # Update incident
-DELETE /api/v1/incidents/{id}          # Delete incident
+PATCH  /api/v1/incidents/{id}          # Update incident (analyst+)
+DELETE /api/v1/incidents/{id}          # Delete incident (analyst+)
 ```
 
 ### Pipeline (Week 3)
@@ -179,6 +179,21 @@ GET    /api/v1/clusters                   # List clusters (with filters)
 GET    /api/v1/clusters/stats             # Cluster statistics
 GET    /api/v1/clusters/{id}              # Cluster detail with incidents
 PATCH  /api/v1/clusters/{id}/resolve      # Mark cluster as resolved
+```
+
+### Authentication (Week 8)
+```bash
+POST   /api/v1/auth/register              # Create new user account
+POST   /api/v1/auth/login                 # Authenticate and receive tokens
+POST   /api/v1/auth/refresh               # Refresh access token
+```
+
+### Users (Week 8 - Admin only)
+```bash
+GET    /api/v1/users/me                   # Get current user profile
+GET    /api/v1/users                      # List all users (admin)
+PATCH  /api/v1/users/{id}                 # Update user (admin)
+DELETE /api/v1/users/{id}                 # Deactivate user (admin)
 ```
 
 ---

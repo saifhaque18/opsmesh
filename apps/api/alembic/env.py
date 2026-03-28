@@ -13,6 +13,7 @@ from src.opsmesh.models.event import TimelineEvent  # noqa: F401
 from src.opsmesh.models.cluster import IncidentCluster  # noqa: F401 — registers model
 from src.opsmesh.models.incident import Incident  # noqa: F401 — registers model
 from src.opsmesh.models.score_history import ScoreHistory  # noqa: F401
+from src.opsmesh.models.user import User  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
