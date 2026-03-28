@@ -5,7 +5,7 @@ import {
   useContext,
   useEffect,
   useCallback,
-  useSyncExternalStore,
+  useState,
   type ReactNode,
 } from "react";
 import api, {
@@ -28,19 +28,12 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
 });
 
-// Storage key for user data
+// Storage keys
 const USER_KEY = "user";
 const TOKEN_KEY = "access_token";
 
-// Listeners for storage changes
-const subscribers = new Set<() => void>();
-
-function subscribeToStorage(callback: () => void) {
-  subscribers.add(callback);
-  return () => subscribers.delete(callback);
-}
-
-function getStoredUserSnapshot(): AuthUser | null {
+function getStoredUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
   const token = localStorage.getItem(TOKEN_KEY);
   const storedUser = localStorage.getItem(USER_KEY);
   if (token && storedUser) {
@@ -53,26 +46,21 @@ function getStoredUserSnapshot(): AuthUser | null {
   return null;
 }
 
-function getServerSnapshot(): AuthUser | null {
-  return null;
-}
-
-function notifySubscribers() {
-  subscribers.forEach((callback) => callback());
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const user = useSyncExternalStore(
-    subscribeToStorage,
-    getStoredUserSnapshot,
-    getServerSnapshot
-  );
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Hydrate user from localStorage on mount
+  useEffect(() => {
+    setUser(getStoredUser());
+    setIsHydrated(true);
+  }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("user");
-    notifySubscribers();
+    setUser(null);
   }, []);
 
   // Set up axios interceptor for auth headers
@@ -108,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.setItem("access_token", tokens.access_token);
             localStorage.setItem("refresh_token", tokens.refresh_token);
             localStorage.setItem("user", JSON.stringify(tokens.user));
-            notifySubscribers();
+            setUser(tokens.user);
             originalRequest.headers.Authorization = `Bearer ${tokens.access_token}`;
             return api(originalRequest);
           } catch {
@@ -129,8 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("access_token", tokens.access_token);
     localStorage.setItem("refresh_token", tokens.refresh_token);
     localStorage.setItem("user", JSON.stringify(tokens.user));
-    notifySubscribers();
+    setUser(tokens.user);
   }, []);
+
+  // Don't render children until hydrated to avoid hydration mismatch
+  if (!isHydrated) {
+    return null;
+  }
 
   return (
     <AuthContext.Provider

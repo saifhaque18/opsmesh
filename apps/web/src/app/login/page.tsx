@@ -19,7 +19,7 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      router.push("/");
+      router.push("/dashboard");
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -111,15 +111,15 @@ export default function LoginPage() {
           <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
             <p>
               <span className="font-medium">Admin:</span> admin@opsmesh.dev /
-              admin123
+              opsmesh-admin-2025
             </p>
             <p>
               <span className="font-medium">Analyst:</span> analyst@opsmesh.dev
-              / analyst123
+              / opsmesh-analyst-2025
             </p>
             <p>
               <span className="font-medium">Viewer:</span> viewer@opsmesh.dev /
-              viewer123
+              opsmesh-viewer-2025
             </p>
           </div>
         </div>
