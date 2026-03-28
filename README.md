@@ -92,8 +92,9 @@ Modern operations teams are overwhelmed by alert noise. OpsMesh reduces cognitiv
 - [x] Role-based access control (admin/analyst/viewer)
 - [x] Audit logging
 - [x] Dockerized local development
-- [x] Test suite (179 tests)
+- [x] Test suite (80+ tests across service, API, pipeline, e2e layers)
 - [x] CI/CD pipeline
+- [x] Landing page with liquid glass UI
 
 ### v2 (Planned)
 - [ ] Slack/email alerting
@@ -134,17 +135,25 @@ uvicorn src.opsmesh.main:app --reload --port 8000
 cd apps/web
 pnpm install
 pnpm dev
-```
 
-# In another terminal, start the worker (Week 3+)
+# In another terminal, start the worker
 cd apps/api
 source .venv/bin/activate
 python -m src.opsmesh.worker.run
 ```
 
 - Frontend: http://localhost:3000
+- Dashboard: http://localhost:3000/dashboard
 - API: http://localhost:8000
 - API Docs: http://localhost:8000/docs
+
+### Demo Credentials
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@opsmesh.dev | opsmesh-admin-2025 |
+| Analyst | analyst@opsmesh.dev | opsmesh-analyst-2025 |
+| Viewer | viewer@opsmesh.dev | opsmesh-viewer-2025 |
 
 ---
 
@@ -229,15 +238,34 @@ opsmesh/
 ## Testing
 
 ```bash
-# API tests
+# API tests (requires test database)
 cd apps/api
 source .venv/bin/activate
+
+# Create test database
+docker compose exec postgres psql -U opsmesh -c "CREATE DATABASE opsmesh_test;"
+
+# Run tests
+DATABASE_URL=postgresql+asyncpg://opsmesh:opsmesh@localhost:5432/opsmesh_test \
+SECRET_KEY=test-secret \
 pytest tests/ -v
 
-# Frontend tests (coming soon)
-cd apps/web
-pnpm test
+# Run specific test categories
+pytest tests/ -v -m integration    # Integration tests
+pytest tests/ -v -m e2e            # End-to-end tests
 ```
+
+### Test Coverage
+
+| Category | Tests | Description |
+|----------|-------|-------------|
+| AI Service | 32 | Prompt construction, parsing, mock responses |
+| Auth API | 13 | Register, login, refresh, permissions |
+| Incidents API | 15 | CRUD, filtering, validation |
+| Incident Service | 15 | Service layer operations |
+| Pipeline | 8 | Processing pipeline integration |
+| Failure Paths | 16 | Error handling, edge cases |
+| E2E | 2 | Full lifecycle tests |
 
 ---
 
@@ -257,15 +285,15 @@ pnpm test
 
 | Week | Focus |
 |------|-------|
-| 1 | Foundation: repo setup, Docker, CI |
-| 2 | Incident ingestion and dashboard |
-| 3 | Worker pipeline and async processing |
-| 4 | Clustering and deduplication |
-| 5 | Severity scoring engine |
-| 6 | AI response suggestions |
-| 7 | Timeline and auditability |
-| 8 | Auth and access control |
-| 9 | Testing and reliability |
+| 1 | Foundation: repo setup, Docker, CI ✅ |
+| 2 | Incident ingestion and dashboard ✅ |
+| 3 | Worker pipeline and async processing ✅ |
+| 4 | Clustering and deduplication ✅ |
+| 5 | Severity scoring engine ✅ |
+| 6 | AI response suggestions ✅ |
+| 7 | Timeline and auditability ✅ |
+| 8 | Auth and access control ✅ |
+| 9 | Testing and reliability ✅ |
 | 10 | Polish and observability |
 | 11 | Deployment and demo |
 | 12 | Launch and documentation |
