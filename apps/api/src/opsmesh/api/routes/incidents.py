@@ -6,12 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.opsmesh.core.database import get_db
 from src.opsmesh.models.incident import IncidentSeverity, IncidentStatus
+from src.opsmesh.models.score_history import ScoreHistory
 from src.opsmesh.schemas.incident import (
     IncidentCreate,
     IncidentListResponse,
     IncidentResponse,
     IncidentStats,
     IncidentUpdate,
+    ScoreHistoryEntry,
+    ScoreHistoryListResponse,
+    ScoringExplanationResponse,
+    SeverityOverrideRequest,
 )
 from src.opsmesh.services.incident_service import IncidentService
 from src.opsmesh.services.queue_service import (
@@ -141,3 +146,136 @@ async def reprocess_incident(incident_id: uuid.UUID, db: DB):
         "job_id": job.id,
         "queue": job.origin,
     }
+
+
+@router.post("/{incident_id}/override-severity", response_model=IncidentResponse)
+async def override_severity(
+    incident_id: uuid.UUID,
+    data: SeverityOverrideRequest,
+    db: DB,
+    user_email: str = "analyst@example.com",  # TODO: Replace with auth user
+):
+    """Manually override an incident's severity score."""
+    from sqlalchemy import select
+
+    from src.opsmesh.models.incident import Incident
+    from src.opsmesh.services.scoring.engine import ScoringEngine
+
+    # Get the incident
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    previous_score = incident.severity_score
+
+    # Determine severity label from score
+    severity_label = ScoringEngine.score_to_label(data.score)
+
+    # Update the incident
+    incident.severity_score = data.score
+    await db.flush()
+
+    # Record in history (sync operation, run in executor)
+    import asyncio
+
+    from src.opsmesh.core.sync_database import get_sync_db
+    from src.opsmesh.services.scoring.history import record_score
+
+    def _record():
+        sync_db = get_sync_db()
+        try:
+            record_score(
+                db=sync_db,
+                incident_id=str(incident_id),
+                score=data.score,
+                severity_label=severity_label,
+                source="manual",
+                previous_score=previous_score,
+                scored_by=user_email,
+                override_reason=data.reason,
+            )
+            sync_db.commit()
+        finally:
+            sync_db.close()
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _record)
+
+    await db.commit()
+    await db.refresh(incident)
+    return incident
+
+
+@router.get("/{incident_id}/score-history", response_model=ScoreHistoryListResponse)
+async def get_score_history(incident_id: uuid.UUID, db: DB):
+    """Get the score history for an incident."""
+    from sqlalchemy import select
+
+    from src.opsmesh.models.incident import Incident
+
+    # Verify incident exists
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Get history entries
+    result = await db.execute(
+        select(ScoreHistory)
+        .where(ScoreHistory.incident_id == incident_id)
+        .order_by(ScoreHistory.scored_at.desc())
+    )
+    entries = result.scalars().all()
+
+    return ScoreHistoryListResponse(
+        incident_id=incident_id,
+        entries=[ScoreHistoryEntry.model_validate(e) for e in entries],
+        total=len(entries),
+    )
+
+
+@router.get("/{incident_id}/scoring", response_model=ScoringExplanationResponse)
+async def get_scoring_explanation(incident_id: uuid.UUID, db: DB):
+    """Get the current scoring breakdown for an incident."""
+    from sqlalchemy import select
+
+    from src.opsmesh.models.incident import Incident
+    from src.opsmesh.services.scoring.engine import ScoringEngine
+
+    # Get the incident
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Build incident dict for scoring
+    incident_data = {
+        "id": str(incident.id),
+        "title": incident.title,
+        "description": incident.description,
+        "source": incident.source,
+        "severity": incident.severity.value if incident.severity else "medium",
+        "service": incident.service,
+        "environment": incident.environment,
+        "region": incident.region,
+    }
+
+    # Score and get breakdown
+    engine = ScoringEngine.default()
+    result = engine.score(incident_data)
+
+    return ScoringExplanationResponse(
+        final_score=result.final_score,
+        severity_label=result.severity_label,
+        explanation=result.explanation,
+        rules=[
+            {
+                "rule": r.rule,
+                "score": r.score,
+                "weight": r.weight,
+                "explanation": r.explanation,
+            }
+            for r in result.rules
+        ],
+    )

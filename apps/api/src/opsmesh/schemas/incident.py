@@ -98,3 +98,57 @@ class IncidentStats(BaseModel):
     high: int
     medium: int
     low: int
+
+
+# ─── Scoring schemas ──────────────────────────────
+
+
+class SeverityOverrideRequest(BaseModel):
+    """Request to manually override an incident's severity score."""
+
+    score: float = Field(..., ge=0.0, le=1.0, description="New severity score (0-1)")
+    reason: str = Field(..., min_length=5, max_length=500, description="Why override?")
+
+
+class RuleResultResponse(BaseModel):
+    """Individual rule scoring result."""
+
+    rule: str
+    score: float
+    weight: float
+    explanation: str
+
+
+class ScoringExplanationResponse(BaseModel):
+    """Full scoring breakdown for an incident."""
+
+    final_score: float
+    severity_label: str
+    explanation: str
+    rules: list[RuleResultResponse]
+    scored_at: datetime | None = None
+
+
+class ScoreHistoryEntry(BaseModel):
+    """Single score history entry."""
+
+    id: uuid.UUID
+    score: float
+    previous_score: float | None
+    severity_label: str
+    source: str
+    scored_by: str | None
+    explanation: str | None
+    rule_details: dict | None
+    override_reason: str | None
+    scored_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ScoreHistoryListResponse(BaseModel):
+    """List of score history entries for an incident."""
+
+    incident_id: uuid.UUID
+    entries: list[ScoreHistoryEntry]
+    total: int

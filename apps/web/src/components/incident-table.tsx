@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchIncidents, type Incident, type IncidentFilters } from "@/lib/api";
@@ -8,6 +8,7 @@ import { SeverityBadge } from "./severity-badge";
 import { StatusBadge } from "./status-badge";
 import { ProcessingBadge } from "./processing-badge";
 import { DuplicateBadge } from "./duplicate-badge";
+import ScoringPanel from "./scoring-panel";
 
 export function IncidentTable() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -18,6 +19,7 @@ export function IncidentTable() {
     page: 1,
     page_size: 15,
   });
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadIncidents = useCallback(async () => {
     setLoading(true);
@@ -125,53 +127,70 @@ export function IncidentTable() {
               </tr>
             ) : (
               incidents.map((incident) => (
-                <tr
-                  key={incident.id}
-                  className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                >
-                  <td className="max-w-xs px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate font-medium text-gray-900 dark:text-gray-100">
-                        {incident.title}
-                      </p>
-                      <DuplicateBadge
-                        isDuplicate={incident.is_duplicate}
-                        similarityScore={incident.similarity_score}
+                <Fragment key={incident.id}>
+                  <tr
+                    onClick={() =>
+                      setExpandedId(expandedId === incident.id ? null : incident.id)
+                    }
+                    className={`cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
+                      expandedId === incident.id ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                    }`}
+                  >
+                    <td className="max-w-xs px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-medium text-gray-900 dark:text-gray-100">
+                          {incident.title}
+                        </p>
+                        <DuplicateBadge
+                          isDuplicate={incident.is_duplicate}
+                          similarityScore={incident.similarity_score}
+                        />
+                      </div>
+                      {incident.assigned_to && (
+                        <p className="mt-0.5 truncate text-xs text-gray-400">
+                          {incident.assigned_to}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <SeverityBadge severity={incident.severity} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={incident.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <ProcessingBadge
+                        status={incident.processing_status}
+                        score={incident.severity_score}
                       />
-                    </div>
-                    {incident.assigned_to && (
-                      <p className="mt-0.5 truncate text-xs text-gray-400">
-                        {incident.assigned_to}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <SeverityBadge severity={incident.severity} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={incident.status} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <ProcessingBadge
-                      status={incident.processing_status}
-                      score={incident.severity_score}
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {incident.source}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {incident.service || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {incident.environment || "—"}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {incident.detected_at
-                      ? formatDistanceToNow(new Date(incident.detected_at), { addSuffix: true })
-                      : "—"}
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                      {incident.source}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                      {incident.service || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                      {incident.environment || "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-gray-500 dark:text-gray-400">
+                      {incident.detected_at
+                        ? formatDistanceToNow(new Date(incident.detected_at), { addSuffix: true })
+                        : "—"}
+                    </td>
+                  </tr>
+                  {expandedId === incident.id && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-4 bg-gray-50 dark:bg-gray-800/30">
+                        <ScoringPanel
+                          incidentId={incident.id}
+                          currentScore={incident.severity_score}
+                          onScoreUpdated={loadIncidents}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))
             )}
           </tbody>

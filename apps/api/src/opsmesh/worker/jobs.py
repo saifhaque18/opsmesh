@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 from src.opsmesh.core.sync_database import get_sync_db
 from src.opsmesh.models.incident import Incident
+from src.opsmesh.services.scoring.history import record_score
 from src.opsmesh.worker.dedup_step import dedup_and_cluster
 from src.opsmesh.worker.pipeline import (
     compute_fingerprint,
@@ -76,6 +77,18 @@ def process_incident(incident_id: str) -> dict:
             incident.environment = incident_data["environment"]
         incident.fingerprint = incident_data.get("fingerprint")
         incident.severity_score = incident_data.get("severity_score")
+
+        # Record score in history
+        score_details = incident_data.get("_score_details", {})
+        record_score(
+            db=db,
+            incident_id=str(incident.id),
+            score=incident_data.get("severity_score", 0.0),
+            severity_label=incident_data.get("_severity_label", "medium"),
+            source="engine",
+            explanation=incident_data.get("_score_explanation"),
+            rule_details=score_details,
+        )
 
         db.commit()
 

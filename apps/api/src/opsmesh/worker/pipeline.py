@@ -113,74 +113,31 @@ def enrich_metadata(incident: dict) -> dict:
 @log_step("score")
 def score_severity(incident: dict) -> dict:
     """
-    Step 4: Compute a severity score (0.0 to 1.0).
+    Step 4: Compute severity score using the rules engine.
 
-    This is a rules-based scoring engine. It considers:
-    - The declared severity level
-    - The environment (prod > staging > dev)
-    - Category risk weights
-    - Keyword urgency signals
+    Replaces the inline scorer from Week 3 with the
+    configurable, weighted, explainable engine.
 
-    In Week 5, this will be upgraded with ML/embedding scoring.
+    Six rules with weighted averaging:
+    - SeverityLevelRule (w=3.0)
+    - EnvironmentRule (w=2.0)
+    - KeywordUrgencyRule (w=1.5)
+    - ServiceCriticalityRule (w=2.0)
+    - RepeatOffenderRule (w=1.0)
+    - TimeOfDayRule (w=0.5)
     """
-    score = 0.0
+    from src.opsmesh.services.scoring.engine import ScoringEngine
 
-    # Base score from declared severity
-    severity_weights = {
-        "critical": 0.9,
-        "high": 0.7,
-        "medium": 0.5,
-        "low": 0.3,
-        "info": 0.1,
-    }
-    severity = incident.get("severity", "medium")
-    if isinstance(severity, str):
-        score = severity_weights.get(severity, 0.5)
-    else:
-        score = severity_weights.get(severity.value, 0.5)
+    engine = ScoringEngine.default()
+    result = engine.score(incident)
 
-    # Environment multiplier
-    env_multipliers = {
-        "prod": 1.0,
-        "staging": 0.7,
-        "dev": 0.4,
-        "test": 0.2,
-    }
-    env = incident.get("environment", "prod")
-    score *= env_multipliers.get(env, 0.8)
+    incident["severity_score"] = result.final_score
+    incident["_severity_label"] = result.severity_label
+    incident["_score_explanation"] = result.explanation
+    incident["_score_details"] = result.to_dict()
 
-    # Category adjustment
-    category_boost = {
-        "error": 0.1,
-        "security": 0.15,
-        "deployment": 0.05,
-        "resource": 0.05,
-        "performance": 0.0,
-        "queue": 0.0,
-        "other": 0.0,
-    }
-    category = incident.get("_category", "other")
-    score += category_boost.get(category, 0.0)
-
-    # Urgency keywords in title
-    title = (incident.get("title") or "").lower()
-    if any(kw in title for kw in ["crash", "down", "outage", "data loss"]):
-        score += 0.15
-    if any(kw in title for kw in ["intermittent", "warning", "minor"]):
-        score -= 0.1
-
-    # Clamp to [0.0, 1.0]
-    score = max(0.0, min(1.0, round(score, 3)))
-
-    incident["severity_score"] = score
-    sev_key = severity if isinstance(severity, str) else severity.value
-    base_score = severity_weights.get(sev_key, 0.5)
-    incident["_score_explanation"] = (
-        f"base={base_score}, "
-        f"env={env}({env_multipliers.get(env, 0.8)}x), "
-        f"category={category}(+{category_boost.get(category, 0.0)}), "
-        f"final={score}"
+    logger.info(
+        "Severity score: %.3f (%s)", result.final_score, result.severity_label
     )
 
-    logger.info("Severity score: %s", score)
     return incident

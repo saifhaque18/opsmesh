@@ -113,6 +113,46 @@ export interface ClusterFilters {
   min_incidents?: number;
 }
 
+// Scoring types
+export interface RuleResult {
+  rule: string;
+  score: number;
+  weight: number;
+  explanation: string;
+}
+
+export interface ScoringExplanation {
+  final_score: number;
+  severity_label: string;
+  explanation: string;
+  rules: RuleResult[];
+  scored_at: string | null;
+}
+
+export interface ScoreHistoryEntry {
+  id: string;
+  score: number;
+  previous_score: number | null;
+  severity_label: string;
+  source: string;
+  scored_by: string | null;
+  explanation: string | null;
+  rule_details: Record<string, unknown> | null;
+  override_reason: string | null;
+  scored_at: string;
+}
+
+export interface ScoreHistoryResponse {
+  incident_id: string;
+  entries: ScoreHistoryEntry[];
+  total: number;
+}
+
+export interface SeverityOverrideRequest {
+  score: number;
+  reason: string;
+}
+
 // Incident API functions
 export async function fetchIncidents(
   filters: IncidentFilters = {}
@@ -158,6 +198,34 @@ export async function fetchCluster(id: string): Promise<ClusterDetail> {
 
 export async function fetchClusterStats(): Promise<ClusterStats> {
   const { data } = await api.get("/api/v1/clusters/stats");
+  return data;
+}
+
+// Scoring API functions
+export async function fetchScoringExplanation(
+  incidentId: string
+): Promise<ScoringExplanation> {
+  const { data } = await api.get(`/api/v1/incidents/${incidentId}/scoring`);
+  return data;
+}
+
+export async function fetchScoreHistory(
+  incidentId: string
+): Promise<ScoreHistoryResponse> {
+  const { data } = await api.get(
+    `/api/v1/incidents/${incidentId}/score-history`
+  );
+  return data;
+}
+
+export async function overrideSeverity(
+  incidentId: string,
+  request: SeverityOverrideRequest
+): Promise<Incident> {
+  const { data } = await api.post(
+    `/api/v1/incidents/${incidentId}/override-severity`,
+    request
+  );
   return data;
 }
 
