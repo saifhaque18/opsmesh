@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.opsmesh.api.routes.incidents import router as incidents_router
+
 app = FastAPI(
     title="OpsMesh API",
     description="AI-powered incident intelligence platform",
@@ -21,11 +23,4 @@ async def health_check():
     return {"status": "healthy", "service": "opsmesh-api"}
 
 
-@app.get("/api/v1/incidents")
-async def list_incidents():
-    """Placeholder — will be replaced with real DB queries in Week 2."""
-    return {
-        "incidents": [],
-        "total": 0,
-        "message": "Incident ingestion coming in Week 2",
-    }
+app.include_router(incidents_router)
