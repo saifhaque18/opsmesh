@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 from src.opsmesh.core.sync_database import get_sync_db
 from src.opsmesh.models.incident import Incident
+from src.opsmesh.worker.dedup_step import dedup_and_cluster
 from src.opsmesh.worker.pipeline import (
     compute_fingerprint,
     enrich_metadata,
@@ -66,7 +67,7 @@ def process_incident(incident_id: str) -> dict:
         incident_data = enrich_metadata(incident_data)
         incident_data = score_severity(incident_data)
 
-        # Write results back to the database
+        # Write pipeline results back to the database
         incident.title = incident_data["title"]
         incident.source = incident_data["source"]
         if incident_data.get("service"):
@@ -75,8 +76,18 @@ def process_incident(incident_id: str) -> dict:
             incident.environment = incident_data["environment"]
         incident.fingerprint = incident_data.get("fingerprint")
         incident.severity_score = incident_data.get("severity_score")
-        incident.processing_status = "completed"
 
+        db.commit()
+
+        # Run deduplication and clustering (uses its own DB session)
+        dedup_result = dedup_and_cluster(
+            incident_id=str(incident.id),
+            fingerprint=incident_data.get("fingerprint", ""),
+        )
+
+        # Mark as completed
+        incident = db.query(Incident).filter(Incident.id == incident_id).first()
+        incident.processing_status = "completed"
         db.commit()
 
         result = {
@@ -86,6 +97,7 @@ def process_incident(incident_id: str) -> dict:
             "severity_score": incident_data.get("severity_score"),
             "category": incident_data.get("_category"),
             "score_explanation": incident_data.get("_score_explanation"),
+            "dedup": dedup_result,
             "processed_at": datetime.now(UTC).isoformat(),
         }
 

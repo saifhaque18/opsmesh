@@ -1,7 +1,13 @@
+"use client";
+
+import { useState } from "react";
 import { StatsCards } from "@/components/stats-cards";
 import { IncidentTable } from "@/components/incident-table";
+import { ClusterList } from "@/components/cluster-list";
 
 export default function Dashboard() {
+  const [activeTab, setActiveTab] = useState<"incidents" | "clusters">("incidents");
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
@@ -40,8 +46,32 @@ export default function Dashboard() {
           <StatsCards />
         </div>
 
-        {/* Incident table */}
-        <IncidentTable />
+        {/* Tab navigation */}
+        <div className="mb-6 flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+          <button
+            onClick={() => setActiveTab("incidents")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === "incidents"
+                ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100"
+                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            All incidents
+          </button>
+          <button
+            onClick={() => setActiveTab("clusters")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === "clusters"
+                ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100"
+                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            Clusters
+          </button>
+        </div>
+
+        {/* Tab content */}
+        {activeTab === "incidents" ? <IncidentTable /> : <ClusterList />}
       </main>
     </div>
   );

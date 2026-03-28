@@ -57,7 +57,7 @@ class IncidentResponse(BaseModel):
     environment: str | None
     region: str | None
     fingerprint: str | None
-    cluster_id: str | None
+    cluster_id: uuid.UUID | None
     assigned_to: str | None
     detected_at: datetime | None
     acknowledged_at: datetime | None
@@ -66,6 +66,9 @@ class IncidentResponse(BaseModel):
     ai_suggested_actions: str | None
     ai_reviewed: bool
     processing_status: str | None
+    is_duplicate: bool
+    duplicate_of: uuid.UUID | None
+    similarity_score: float | None
     created_at: datetime
     updated_at: datetime
 

@@ -80,15 +80,18 @@ Modern operations teams are overwhelmed by alert noise. OpsMesh reduces cognitiv
 - [x] Incident ingestion API
 - [x] Dashboard with incident list
 - [x] Deduplication fingerprinting
+- [x] Incident clustering (exact + fuzzy matching)
 - [x] Severity scoring engine
 - [x] Worker pipeline with RQ
+- [x] Cluster API (list, detail, stats, resolve)
+- [x] Dashboard tabs (Incidents / Clusters)
 - [ ] AI-generated response suggestions
 - [ ] Incident timeline
 - [x] Search and filtering
 - [ ] Basic authentication
 - [ ] Audit logging
 - [x] Dockerized local development
-- [x] Test suite (38 tests)
+- [x] Test suite (59 tests)
 - [x] CI/CD pipeline
 
 ### v2 (Planned)
@@ -168,6 +171,14 @@ DELETE /api/v1/incidents/{id}          # Delete incident
 GET    /api/v1/incidents/pipeline/stats   # Queue depths & failed counts
 GET    /api/v1/incidents/{id}/job         # Processing job status
 POST   /api/v1/incidents/{id}/reprocess   # Re-queue for processing
+```
+
+### Clusters (Week 4)
+```bash
+GET    /api/v1/clusters                   # List clusters (with filters)
+GET    /api/v1/clusters/stats             # Cluster statistics
+GET    /api/v1/clusters/{id}              # Cluster detail with incidents
+PATCH  /api/v1/clusters/{id}/resolve      # Mark cluster as resolved
 ```
 
 ---

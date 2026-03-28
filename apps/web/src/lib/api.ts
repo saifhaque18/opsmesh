@@ -18,6 +18,8 @@ export interface Incident {
   service: string | null;
   environment: string | null;
   region: string | null;
+  fingerprint: string | null;
+  cluster_id: string | null;
   assigned_to: string | null;
   detected_at: string | null;
   acknowledged_at: string | null;
@@ -26,6 +28,9 @@ export interface Incident {
   ai_suggested_actions: string | null;
   ai_reviewed: boolean;
   processing_status: string | null;
+  is_duplicate: boolean;
+  duplicate_of: string | null;
+  similarity_score: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +67,53 @@ export interface IncidentFilters {
   search?: string;
 }
 
+// Cluster types
+export interface Cluster {
+  id: string;
+  title: string;
+  description: string | null;
+  fingerprint: string;
+  status: "active" | "merged" | "resolved";
+  incident_count: number;
+  max_severity_score: number | null;
+  confidence: number;
+  primary_service: string | null;
+  primary_source: string | null;
+  primary_environment: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClusterDetail extends Cluster {
+  incidents: Incident[];
+}
+
+export interface ClusterListResponse {
+  clusters: Cluster[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ClusterStats {
+  total_clusters: number;
+  active_clusters: number;
+  total_duplicates: number;
+  avg_cluster_size: number;
+  largest_cluster_size: number;
+}
+
+export interface ClusterFilters {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  service?: string;
+  min_incidents?: number;
+}
+
+// Incident API functions
 export async function fetchIncidents(
   filters: IncidentFilters = {}
 ): Promise<IncidentListResponse> {
@@ -82,6 +134,30 @@ export async function fetchIncidentStats(): Promise<IncidentStats> {
 
 export async function fetchIncident(id: string): Promise<Incident> {
   const { data } = await api.get(`/api/v1/incidents/${id}`);
+  return data;
+}
+
+// Cluster API functions
+export async function fetchClusters(
+  filters: ClusterFilters = {}
+): Promise<ClusterListResponse> {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.append(key, String(value));
+    }
+  });
+  const { data } = await api.get(`/api/v1/clusters?${params.toString()}`);
+  return data;
+}
+
+export async function fetchCluster(id: string): Promise<ClusterDetail> {
+  const { data } = await api.get(`/api/v1/clusters/${id}`);
+  return data;
+}
+
+export async function fetchClusterStats(): Promise<ClusterStats> {
+  const { data } = await api.get("/api/v1/clusters/stats");
   return data;
 }
 

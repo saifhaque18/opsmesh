@@ -1,8 +1,10 @@
+import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, Float, Index, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.opsmesh.models.base import Base, TimestampMixin, UUIDMixin
 
@@ -57,8 +59,29 @@ class Incident(Base, UUIDMixin, TimestampMixin):
     fingerprint: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True, doc="Hash for dedup clustering"
     )
-    cluster_id: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, index=True, doc="Groups related incidents"
+
+    # Cluster relationship
+    cluster_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("incident_clusters.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    cluster: Mapped["IncidentCluster | None"] = relationship(
+        "IncidentCluster", back_populates="incidents", lazy="selectin"
+    )
+
+    # Dedup metadata
+    is_duplicate: Mapped[bool] = mapped_column(default=False, nullable=False)
+    duplicate_of: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        doc="ID of the primary incident this is a duplicate of",
+    )
+    similarity_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        doc="Similarity to the cluster's primary incident (0.0-1.0)",
     )
 
     # Assignment
@@ -96,3 +119,7 @@ class Incident(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<Incident {self.id} [{self.severity.value}] {self.title[:50]}>"
+
+
+# Import at end to avoid circular imports
+from src.opsmesh.models.cluster import IncidentCluster  # noqa: E402, F401

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.opsmesh.api.routes.clusters import router as clusters_router
 from src.opsmesh.api.routes.incidents import router as incidents_router
 from src.opsmesh.core.redis import check_redis_health
 
@@ -32,3 +33,4 @@ async def health_check():
 
 
 app.include_router(incidents_router)
+app.include_router(clusters_router)

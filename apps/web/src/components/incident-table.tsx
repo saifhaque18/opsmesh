@@ -7,6 +7,7 @@ import { fetchIncidents, type Incident, type IncidentFilters } from "@/lib/api";
 import { SeverityBadge } from "./severity-badge";
 import { StatusBadge } from "./status-badge";
 import { ProcessingBadge } from "./processing-badge";
+import { DuplicateBadge } from "./duplicate-badge";
 
 export function IncidentTable() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -129,9 +130,15 @@ export function IncidentTable() {
                   className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
                 >
                   <td className="max-w-xs px-4 py-3">
-                    <p className="truncate font-medium text-gray-900 dark:text-gray-100">
-                      {incident.title}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium text-gray-900 dark:text-gray-100">
+                        {incident.title}
+                      </p>
+                      <DuplicateBadge
+                        isDuplicate={incident.is_duplicate}
+                        similarityScore={incident.similarity_score}
+                      />
+                    </div>
                     {incident.assigned_to && (
                       <p className="mt-0.5 truncate text-xs text-gray-400">
                         {incident.assigned_to}

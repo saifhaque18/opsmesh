@@ -8,6 +8,7 @@ from alembic import context
 
 from src.opsmesh.core.config import settings
 from src.opsmesh.models.base import Base
+from src.opsmesh.models.cluster import IncidentCluster  # noqa: F401 — registers model
 from src.opsmesh.models.incident import Incident  # noqa: F401 — registers model
 
 config = context.config
