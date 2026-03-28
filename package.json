@@ -1,0 +1,14 @@
+{
+  "name": "opsmesh",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @opsmesh/web dev",
+    "dev:api": "cd apps/api && source .venv/bin/activate && uvicorn src.opsmesh.main:app --reload --port 8000",
+    "lint:web": "pnpm --filter @opsmesh/web lint",
+    "lint:api": "cd apps/api && source .venv/bin/activate && ruff check src/",
+    "test:api": "cd apps/api && source .venv/bin/activate && pytest tests/ -v",
+    "infra:up": "docker compose up postgres redis -d",
+    "infra:down": "docker compose down",
+    "clean": "docker compose down -v && rm -rf apps/web/.next apps/web/node_modules"
+  }
+}

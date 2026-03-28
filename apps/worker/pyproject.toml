@@ -1,0 +1,14 @@
+[project]
+name = "opsmesh-worker"
+version = "0.1.0"
+description = "OpsMesh background worker service"
+requires-python = ">=3.11"
+dependencies = [
+    "redis>=5.0",
+    "rq>=1.16",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "sqlalchemy>=2.0",
+    "asyncpg>=0.30.0",
+    "python-dotenv>=1.0",
+]
