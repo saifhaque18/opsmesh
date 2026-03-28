@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -6,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.opsmesh.models.incident import Incident, IncidentSeverity, IncidentStatus
 from src.opsmesh.schemas.incident import IncidentCreate, IncidentUpdate
+from src.opsmesh.services.queue_service import enqueue_incident_processing
+
+logger = logging.getLogger("opsmesh.incident_service")
 
 
 class IncidentService:
@@ -14,7 +18,7 @@ class IncidentService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, data: IncidentCreate) -> Incident:
+    async def create(self, data: IncidentCreate, auto_enqueue: bool = True) -> Incident:
         incident = Incident(
             **data.model_dump(exclude_unset=True),
             detected_at=data.detected_at or datetime.now(UTC),
@@ -23,6 +27,18 @@ class IncidentService:
         self.db.add(incident)
         await self.db.flush()
         await self.db.refresh(incident)
+
+        # Auto-enqueue for pipeline processing
+        if auto_enqueue:
+            job = enqueue_incident_processing(
+                str(incident.id),
+                severity=incident.severity or IncidentSeverity.MEDIUM,
+            )
+            if job:
+                logger.info("Incident %s queued for processing", incident.id)
+            else:
+                logger.warning("Failed to queue incident %s", incident.id)
+
         return incident
 
     async def get_by_id(self, incident_id: uuid.UUID) -> Incident | None:

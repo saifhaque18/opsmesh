@@ -79,15 +79,16 @@ Modern operations teams are overwhelmed by alert noise. OpsMesh reduces cognitiv
 ### v1 (Current Focus)
 - [x] Incident ingestion API
 - [x] Dashboard with incident list
-- [ ] Deduplication and clustering
-- [ ] Severity scoring engine
+- [x] Deduplication fingerprinting
+- [x] Severity scoring engine
+- [x] Worker pipeline with RQ
 - [ ] AI-generated response suggestions
 - [ ] Incident timeline
 - [x] Search and filtering
 - [ ] Basic authentication
 - [ ] Audit logging
 - [x] Dockerized local development
-- [x] Test suite
+- [x] Test suite (38 tests)
 - [x] CI/CD pipeline
 
 ### v2 (Planned)
@@ -132,6 +133,12 @@ pnpm install
 pnpm dev
 ```
 
+# In another terminal, start the worker (Week 3+)
+cd apps/api
+source .venv/bin/activate
+python -m src.opsmesh.worker.run
+```
+
 - Frontend: http://localhost:3000
 - API: http://localhost:8000
 - API Docs: http://localhost:8000/docs
@@ -146,12 +153,21 @@ GET /health
 # Response: { "status": "healthy", "service": "opsmesh-api" }
 ```
 
-### Incidents (Coming Week 2)
+### Incidents
 ```bash
-GET  /api/v1/incidents           # List incidents
-POST /api/v1/incidents           # Create incident
-GET  /api/v1/incidents/{id}      # Get incident details
-PUT  /api/v1/incidents/{id}      # Update incident
+GET    /api/v1/incidents               # List incidents (with filters)
+POST   /api/v1/incidents               # Create incident (auto-queued)
+GET    /api/v1/incidents/stats         # Dashboard statistics
+GET    /api/v1/incidents/{id}          # Get incident details
+PATCH  /api/v1/incidents/{id}          # Update incident
+DELETE /api/v1/incidents/{id}          # Delete incident
+```
+
+### Pipeline (Week 3)
+```bash
+GET    /api/v1/incidents/pipeline/stats   # Queue depths & failed counts
+GET    /api/v1/incidents/{id}/job         # Processing job status
+POST   /api/v1/incidents/{id}/reprocess   # Re-queue for processing
 ```
 
 ---

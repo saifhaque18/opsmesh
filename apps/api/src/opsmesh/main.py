@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.opsmesh.api.routes.incidents import router as incidents_router
+from src.opsmesh.core.redis import check_redis_health
 
 app = FastAPI(
     title="OpsMesh API",
@@ -20,7 +21,14 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "opsmesh-api"}
+    redis_ok = await check_redis_health()
+    return {
+        "status": "healthy" if redis_ok else "degraded",
+        "service": "opsmesh-api",
+        "dependencies": {
+            "redis": "connected" if redis_ok else "disconnected",
+        },
+    }
 
 
 app.include_router(incidents_router)

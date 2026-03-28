@@ -6,6 +6,7 @@ import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchIncidents, type Incident, type IncidentFilters } from "@/lib/api";
 import { SeverityBadge } from "./severity-badge";
 import { StatusBadge } from "./status-badge";
+import { ProcessingBadge } from "./processing-badge";
 
 export function IncidentTable() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -99,6 +100,7 @@ export function IncidentTable() {
               <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Incident</th>
               <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Severity</th>
               <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Status</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Pipeline</th>
               <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Source</th>
               <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Service</th>
               <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Env</th>
@@ -109,14 +111,14 @@ export function IncidentTable() {
             {loading ? (
               [...Array(5)].map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={7} className="px-4 py-4">
+                  <td colSpan={8} className="px-4 py-4">
                     <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
                   </td>
                 </tr>
               ))
             ) : incidents.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
                   No incidents found
                 </td>
               </tr>
@@ -141,6 +143,12 @@ export function IncidentTable() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={incident.status} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <ProcessingBadge
+                      status={incident.processing_status}
+                      score={incident.severity_score}
+                    />
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                     {incident.source}

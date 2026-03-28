@@ -14,6 +14,11 @@ from src.opsmesh.schemas.incident import (
     IncidentUpdate,
 )
 from src.opsmesh.services.incident_service import IncidentService
+from src.opsmesh.services.queue_service import (
+    get_job_status,
+    get_queue_stats,
+    requeue_incident,
+)
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
 
@@ -97,3 +102,42 @@ async def delete_incident(incident_id: uuid.UUID, db: DB):
     deleted = await svc.delete(incident_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Incident not found")
+
+
+@router.get("/pipeline/stats")
+async def get_pipeline_stats():
+    """Get pipeline queue statistics."""
+    return get_queue_stats()
+
+
+@router.get("/{incident_id}/job")
+async def get_incident_job_status(incident_id: uuid.UUID):
+    """Get the processing job status for an incident."""
+    status = get_job_status(str(incident_id))
+    if not status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return status
+
+
+@router.post("/{incident_id}/reprocess")
+async def reprocess_incident(incident_id: uuid.UUID, db: DB):
+    """Re-enqueue an incident for reprocessing."""
+    svc = IncidentService(db)
+    incident = await svc.get_by_id(incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Reset processing status
+    incident.processing_status = "pending"
+    await db.flush()
+
+    severity = incident.severity or IncidentSeverity.MEDIUM
+    job = requeue_incident(str(incident_id), severity)
+    if not job:
+        raise HTTPException(status_code=500, detail="Failed to enqueue job")
+
+    return {
+        "message": "Incident requeued for processing",
+        "job_id": job.id,
+        "queue": job.origin,
+    }
