@@ -174,3 +174,47 @@ class AIReviewRequest(BaseModel):
     reviewed_by: str = Field(..., min_length=1, max_length=200)
     edited_root_cause: str | None = None
     edited_actions: list[dict] | None = None
+
+
+# ─── Notes schemas ────────────────────────────────
+
+
+class NoteCreate(BaseModel):
+    """Request to add a note to an incident."""
+
+    content: str = Field(..., min_length=1, max_length=5000)
+    author: str = Field(..., min_length=1, max_length=200)
+
+
+class NoteResponse(BaseModel):
+    """Note added to an incident."""
+
+    id: uuid.UUID
+    content: str
+    author: str
+    created_at: datetime
+
+
+# ─── Timeline schemas ─────────────────────────────
+
+
+class TimelineEventResponse(BaseModel):
+    """Single timeline event."""
+
+    id: uuid.UUID
+    event_type: str
+    summary: str
+    detail: str | None
+    actor: str | None
+    event_metadata: dict | None
+    occurred_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TimelineResponse(BaseModel):
+    """Timeline of events for an incident."""
+
+    incident_id: uuid.UUID
+    events: list[TimelineEventResponse]
+    total: int

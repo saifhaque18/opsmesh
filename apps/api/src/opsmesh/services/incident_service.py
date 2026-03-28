@@ -5,8 +5,10 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.opsmesh.models.event import EventType
 from src.opsmesh.models.incident import Incident, IncidentSeverity, IncidentStatus
 from src.opsmesh.schemas.incident import IncidentCreate, IncidentUpdate
+from src.opsmesh.services.event_service import emit_event_async
 from src.opsmesh.services.queue_service import enqueue_incident_processing
 
 logger = logging.getLogger("opsmesh.incident_service")
@@ -27,6 +29,19 @@ class IncidentService:
         self.db.add(incident)
         await self.db.flush()
         await self.db.refresh(incident)
+
+        # Emit CREATED event
+        await emit_event_async(
+            db=self.db,
+            incident_id=incident.id,
+            event_type=EventType.CREATED,
+            summary=f"Incident created from {incident.source}",
+            metadata={
+                "title": incident.title,
+                "source": incident.source,
+                "severity": incident.severity.value if incident.severity else None,
+            },
+        )
 
         # Auto-enqueue for pipeline processing
         if auto_enqueue:
@@ -94,13 +109,15 @@ class IncidentService:
         return incidents, total
 
     async def update(
-        self, incident_id: uuid.UUID, data: IncidentUpdate
+        self, incident_id: uuid.UUID, data: IncidentUpdate, actor: str | None = None
     ) -> Incident | None:
         incident = await self.get_by_id(incident_id)
         if not incident:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
+        old_status = incident.status
+        old_severity = incident.severity
 
         # Auto-set timestamps based on status changes
         if "status" in update_data:
@@ -118,6 +135,42 @@ class IncidentService:
 
         await self.db.flush()
         await self.db.refresh(incident)
+
+        # Emit events for status and severity changes
+        if "status" in update_data and update_data["status"] != old_status:
+            new_status = update_data["status"]
+            event_type = EventType.STATUS_CHANGED
+            # Use more specific event types for certain transitions
+            if new_status == IncidentStatus.ACKNOWLEDGED:
+                event_type = EventType.ACKNOWLEDGED
+            elif new_status == IncidentStatus.RESOLVED:
+                event_type = EventType.RESOLVED
+
+            await emit_event_async(
+                db=self.db,
+                incident_id=incident.id,
+                event_type=event_type,
+                summary=f"Status changed from {old_status.value} to {new_status.value}",
+                actor=actor,
+                metadata={
+                    "old_status": old_status.value,
+                    "new_status": new_status.value,
+                },
+            )
+
+        if "severity" in update_data and update_data["severity"] != old_severity:
+            await emit_event_async(
+                db=self.db,
+                incident_id=incident.id,
+                event_type=EventType.SEVERITY_CHANGED,
+                summary=f"Severity changed to {update_data['severity'].value}",
+                actor=actor,
+                metadata={
+                    "old_severity": old_severity.value if old_severity else None,
+                    "new_severity": update_data["severity"].value,
+                },
+            )
+
         return incident
 
     async def delete(self, incident_id: uuid.UUID) -> bool:

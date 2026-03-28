@@ -13,12 +13,14 @@ It:
 import logging
 
 from src.opsmesh.core.sync_database import get_sync_db
+from src.opsmesh.models.event import EventType
 from src.opsmesh.models.incident import Incident
 from src.opsmesh.services.dedup_service import (
     find_exact_duplicate,
     find_fuzzy_matches,
     find_or_create_cluster,
 )
+from src.opsmesh.services.event_service import emit_event
 
 logger = logging.getLogger("opsmesh.dedup_step")
 
@@ -75,6 +77,34 @@ def dedup_and_cluster(incident_id: str, fingerprint: str) -> dict:
                 )
                 incident.cluster_id = cluster.id
                 result["cluster_id"] = str(cluster.id)
+                result["cluster_incident_count"] = cluster.incident_count
+
+                # Emit duplicate detected event
+                emit_event(
+                    db=db,
+                    incident_id=incident_id,
+                    event_type=EventType.DUPLICATE_DETECTED,
+                    summary=f"Exact duplicate of incident {existing.id}",
+                    actor="worker",
+                    metadata={
+                        "duplicate_of": str(existing.id),
+                        "fingerprint": fingerprint,
+                        "match_type": "exact",
+                    },
+                )
+
+                # Emit cluster joined event
+                emit_event(
+                    db=db,
+                    incident_id=incident_id,
+                    event_type=EventType.CLUSTER_JOINED,
+                    summary=f"Joined cluster with {cluster.incident_count} incidents",
+                    actor="worker",
+                    metadata={
+                        "cluster_id": str(cluster.id),
+                        "cluster_incident_count": cluster.incident_count,
+                    },
+                )
 
                 db.commit()
                 return result
@@ -117,6 +147,35 @@ def dedup_and_cluster(incident_id: str, fingerprint: str) -> dict:
                 )
                 incident.cluster_id = cluster.id
                 result["cluster_id"] = str(cluster.id)
+                result["cluster_incident_count"] = cluster.incident_count
+
+                # Emit fuzzy duplicate event if high confidence match
+                if best_score >= 0.8:
+                    emit_event(
+                        db=db,
+                        incident_id=incident_id,
+                        event_type=EventType.DUPLICATE_DETECTED,
+                        summary=f"Fuzzy match to {best_match.id} ({best_score:.0%})",
+                        actor="worker",
+                        metadata={
+                            "duplicate_of": str(best_match.id),
+                            "similarity_score": best_score,
+                            "match_type": "fuzzy",
+                        },
+                    )
+
+                # Emit cluster joined event
+                emit_event(
+                    db=db,
+                    incident_id=incident_id,
+                    event_type=EventType.CLUSTER_JOINED,
+                    summary=f"Joined cluster with {cluster.incident_count} incidents",
+                    actor="worker",
+                    metadata={
+                        "cluster_id": str(cluster.id),
+                        "cluster_incident_count": cluster.incident_count,
+                    },
+                )
 
             db.commit()
             return result
@@ -126,6 +185,21 @@ def dedup_and_cluster(incident_id: str, fingerprint: str) -> dict:
             cluster = find_or_create_cluster(db, fingerprint, incident, confidence=1.0)
             incident.cluster_id = cluster.id
             result["cluster_id"] = str(cluster.id)
+            result["cluster_incident_count"] = cluster.incident_count
+
+            # Emit cluster created event (only for new clusters)
+            if cluster.incident_count == 1:
+                emit_event(
+                    db=db,
+                    incident_id=incident_id,
+                    event_type=EventType.CLUSTER_CREATED,
+                    summary="New incident cluster created",
+                    actor="worker",
+                    metadata={
+                        "cluster_id": str(cluster.id),
+                        "fingerprint": fingerprint,
+                    },
+                )
 
         db.commit()
         return result

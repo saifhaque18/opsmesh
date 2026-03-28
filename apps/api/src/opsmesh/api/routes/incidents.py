@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.opsmesh.core.database import get_db
 from src.opsmesh.models.ai_trace import AITrace
+from src.opsmesh.models.event import EventType
 from src.opsmesh.models.incident import IncidentSeverity, IncidentStatus
 from src.opsmesh.models.score_history import ScoreHistory
 from src.opsmesh.schemas.incident import (
@@ -16,11 +17,16 @@ from src.opsmesh.schemas.incident import (
     IncidentResponse,
     IncidentStats,
     IncidentUpdate,
+    NoteCreate,
+    NoteResponse,
     ScoreHistoryEntry,
     ScoreHistoryListResponse,
     ScoringExplanationResponse,
     SeverityOverrideRequest,
+    TimelineEventResponse,
+    TimelineResponse,
 )
+from src.opsmesh.services.event_service import emit_event_async
 from src.opsmesh.services.incident_service import IncidentService
 from src.opsmesh.services.queue_service import (
     get_job_status,
@@ -204,6 +210,21 @@ async def override_severity(
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _record)
+
+    # Emit severity override event
+    await emit_event_async(
+        db=db,
+        incident_id=incident_id,
+        event_type=EventType.SEVERITY_OVERRIDDEN,
+        summary=f"Severity overridden: {previous_score:.2f} → {data.score:.2f}",
+        actor=user_email,
+        metadata={
+            "previous_score": previous_score,
+            "new_score": data.score,
+            "severity_label": severity_label,
+            "reason": data.reason,
+        },
+    )
 
     await db.commit()
     await db.refresh(incident)
@@ -395,6 +416,20 @@ async def review_ai_analysis(
     finally:
         sync_db.close()
 
+    # Emit AI review submitted event
+    await emit_event_async(
+        db=db,
+        incident_id=incident_id,
+        event_type=EventType.AI_REVIEW_SUBMITTED,
+        summary=f"AI analysis {review.rating} by {review.reviewed_by}",
+        actor=review.reviewed_by,
+        metadata={
+            "rating": review.rating,
+            "feedback": review.feedback,
+            "was_edited": review.rating == "edited",
+        },
+    )
+
     await db.commit()
 
     return {
@@ -402,3 +437,97 @@ async def review_ai_analysis(
         "rating": review.rating,
         "reviewed_by": review.reviewed_by,
     }
+
+
+# ─── Notes endpoints ──────────────────────────────
+
+
+@router.post("/{incident_id}/notes", response_model=NoteResponse, status_code=201)
+async def add_note(incident_id: uuid.UUID, note: NoteCreate, db: DB):
+    """Add a note to an incident."""
+    from sqlalchemy import select
+
+    from src.opsmesh.models.incident import Incident
+
+    # Verify incident exists
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Create the note as a timeline event
+    event = await emit_event_async(
+        db=db,
+        incident_id=incident_id,
+        event_type=EventType.NOTE_ADDED,
+        summary=f"Note added by {note.author}",
+        detail=note.content,
+        actor=note.author,
+    )
+
+    await db.commit()
+
+    return NoteResponse(
+        id=event.id,
+        content=note.content,
+        author=note.author,
+        created_at=event.occurred_at,
+    )
+
+
+# ─── Timeline endpoints ───────────────────────────
+
+
+@router.get("/{incident_id}/timeline", response_model=TimelineResponse)
+async def get_incident_timeline(
+    incident_id: uuid.UUID,
+    db: DB,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """Get the event timeline for an incident."""
+    from sqlalchemy import func, select
+
+    from src.opsmesh.models.event import TimelineEvent
+    from src.opsmesh.models.incident import Incident
+
+    # Verify incident exists
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Get total count
+    count_result = await db.execute(
+        select(func.count(TimelineEvent.id)).where(
+            TimelineEvent.incident_id == incident_id
+        )
+    )
+    total = count_result.scalar() or 0
+
+    # Get events
+    events_result = await db.execute(
+        select(TimelineEvent)
+        .where(TimelineEvent.incident_id == incident_id)
+        .order_by(TimelineEvent.occurred_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    events = list(events_result.scalars().all())
+
+    return TimelineResponse(
+        incident_id=incident_id,
+        events=[
+            TimelineEventResponse(
+                id=e.id,
+                event_type=e.event_type.value,
+                summary=e.summary,
+                detail=e.detail,
+                actor=e.actor,
+                event_metadata=e.event_metadata,
+                occurred_at=e.occurred_at,
+            )
+            for e in events
+        ],
+        total=total,
+    )

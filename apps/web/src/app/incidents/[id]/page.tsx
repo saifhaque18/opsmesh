@@ -3,11 +3,17 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
-import { fetchIncident, type Incident } from "@/lib/api";
+import {
+  fetchIncident,
+  fetchIncidentTimeline,
+  type Incident,
+  type TimelineResponse,
+} from "@/lib/api";
 import { SeverityBadge } from "@/components/severity-badge";
 import { StatusBadge } from "@/components/status-badge";
 import { ProcessingBadge } from "@/components/processing-badge";
 import { AIAnalysisPanel } from "@/components/ai-analysis-panel";
+import { IncidentTimeline } from "@/components/incident-timeline";
 import ScoringPanel from "@/components/scoring-panel";
 
 export default function IncidentDetailPage() {
@@ -15,12 +21,19 @@ export default function IncidentDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const [incident, setIncident] = useState<Incident | null>(null);
+  const [timeline, setTimeline] = useState<TimelineResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [showScoring, setShowScoring] = useState(false);
 
   useEffect(() => {
-    fetchIncident(id)
-      .then(setIncident)
+    Promise.all([
+      fetchIncident(id),
+      fetchIncidentTimeline(id).catch(() => null),
+    ])
+      .then(([incidentData, timelineData]) => {
+        setIncident(incidentData);
+        setTimeline(timelineData);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
@@ -145,12 +158,19 @@ export default function IncidentDetailPage() {
           </div>
 
           {/* Right column: AI analysis */}
-          <div className="lg:col-span-3">
-            <h2 className="mb-4 text-sm font-semibold text-gray-900 dark:text-gray-100">
-              AI analysis
-            </h2>
-            <AIAnalysisPanel incidentId={incident.id} />
+          <div className="lg:col-span-3 space-y-6">
+            <div>
+              <h2 className="mb-4 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                AI analysis
+              </h2>
+              <AIAnalysisPanel incidentId={incident.id} />
+            </div>
           </div>
+        </div>
+
+        {/* Timeline - full width */}
+        <div className="mt-8">
+          <IncidentTimeline incidentId={incident.id} initialTimeline={timeline} />
         </div>
       </main>
     </div>

@@ -11,7 +11,9 @@ import traceback
 from datetime import UTC, datetime
 
 from src.opsmesh.core.sync_database import get_sync_db
+from src.opsmesh.models.event import EventType
 from src.opsmesh.models.incident import Incident
+from src.opsmesh.services.event_service import emit_event
 from src.opsmesh.services.scoring.history import record_score
 from src.opsmesh.worker.ai_step import run_ai_analysis
 from src.opsmesh.worker.dedup_step import dedup_and_cluster
@@ -49,6 +51,16 @@ def process_incident(incident_id: str) -> dict:
 
         # Update processing state
         incident.processing_status = "processing"
+        db.commit()
+
+        # Emit processing started event
+        emit_event(
+            db=db,
+            incident_id=incident_id,
+            event_type=EventType.PROCESSING_STARTED,
+            summary="Pipeline processing started",
+            actor="worker",
+        )
         db.commit()
 
         # Build a dict representation for pipeline processing
@@ -91,6 +103,20 @@ def process_incident(incident_id: str) -> dict:
             rule_details=score_details,
         )
 
+        # Emit severity scored event
+        emit_event(
+            db=db,
+            incident_id=incident_id,
+            event_type=EventType.SEVERITY_SCORED,
+            summary=f"Severity: {incident_data.get('_severity_label', 'medium')}",
+            actor="worker",
+            metadata={
+                "score": incident_data.get("severity_score"),
+                "severity_label": incident_data.get("_severity_label"),
+                "explanation": incident_data.get("_score_explanation"),
+            },
+        )
+
         db.commit()
 
         # Run deduplication and clustering (uses its own DB session)
@@ -114,6 +140,21 @@ def process_incident(incident_id: str) -> dict:
         # Mark as completed
         incident = db.query(Incident).filter(Incident.id == incident_id).first()
         incident.processing_status = "completed"
+
+        # Emit processing completed event
+        emit_event(
+            db=db,
+            incident_id=incident_id,
+            event_type=EventType.PROCESSING_COMPLETED,
+            summary="Pipeline processing completed",
+            actor="worker",
+            metadata={
+                "severity_score": incident_data.get("severity_score"),
+                "fingerprint": incident_data.get("fingerprint"),
+                "category": incident_data.get("_category"),
+                "ai_confidence": ai_result.get("confidence"),
+            },
+        )
         db.commit()
 
         result = {
@@ -150,6 +191,14 @@ def process_incident(incident_id: str) -> dict:
             incident = db.query(Incident).filter(Incident.id == incident_id).first()
             if incident:
                 incident.processing_status = "failed"
+                emit_event(
+                    db=db,
+                    incident_id=incident_id,
+                    event_type=EventType.PROCESSING_FAILED,
+                    summary=f"Pipeline processing failed: {str(e)[:100]}",
+                    actor="worker",
+                    metadata={"error": str(e)},
+                )
                 db.commit()
         except Exception:
             db.rollback()

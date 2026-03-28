@@ -9,6 +9,7 @@ from alembic import context
 from src.opsmesh.core.config import settings
 from src.opsmesh.models.ai_trace import AITrace  # noqa: F401
 from src.opsmesh.models.base import Base
+from src.opsmesh.models.event import TimelineEvent  # noqa: F401
 from src.opsmesh.models.cluster import IncidentCluster  # noqa: F401 — registers model
 from src.opsmesh.models.incident import Incident  # noqa: F401 — registers model
 from src.opsmesh.models.score_history import ScoreHistory  # noqa: F401

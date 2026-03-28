@@ -287,4 +287,78 @@ export async function submitAIReview(
   await api.post(`/api/v1/incidents/${incidentId}/ai-review`, review);
 }
 
+// Timeline types
+export type EventType =
+  | "created"
+  | "status_changed"
+  | "severity_changed"
+  | "assigned"
+  | "unassigned"
+  | "processing_started"
+  | "processing_completed"
+  | "processing_failed"
+  | "duplicate_detected"
+  | "cluster_joined"
+  | "cluster_created"
+  | "ai_analysis_completed"
+  | "ai_review_submitted"
+  | "severity_scored"
+  | "severity_overridden"
+  | "note_added"
+  | "escalated"
+  | "acknowledged"
+  | "resolved"
+  | "reopened";
+
+export interface TimelineEvent {
+  id: string;
+  event_type: EventType;
+  summary: string;
+  detail: string | null;
+  actor: string | null;
+  event_metadata: Record<string, unknown> | null;
+  occurred_at: string;
+}
+
+export interface TimelineResponse {
+  incident_id: string;
+  events: TimelineEvent[];
+  total: number;
+}
+
+export interface NoteCreateRequest {
+  content: string;
+  author: string;
+}
+
+export interface NoteResponse {
+  id: string;
+  content: string;
+  author: string;
+  created_at: string;
+}
+
+// Timeline API functions
+export async function fetchIncidentTimeline(
+  incidentId: string,
+  limit: number = 100,
+  offset: number = 0
+): Promise<TimelineResponse> {
+  const { data } = await api.get(
+    `/api/v1/incidents/${incidentId}/timeline?limit=${limit}&offset=${offset}`
+  );
+  return data;
+}
+
+export async function addIncidentNote(
+  incidentId: string,
+  note: NoteCreateRequest
+): Promise<NoteResponse> {
+  const { data } = await api.post(
+    `/api/v1/incidents/${incidentId}/notes`,
+    note
+  );
+  return data;
+}
+
 export default api;

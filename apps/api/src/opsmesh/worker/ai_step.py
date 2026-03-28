@@ -10,9 +10,11 @@ import logging
 
 from src.opsmesh.core.sync_database import get_sync_db
 from src.opsmesh.models.ai_trace import AITrace
+from src.opsmesh.models.event import EventType
 from src.opsmesh.models.incident import Incident
 from src.opsmesh.services.ai.analyzer import analyze_incident
 from src.opsmesh.services.ai.prompts import SYSTEM_PROMPT
+from src.opsmesh.services.event_service import emit_event
 
 logger = logging.getLogger("opsmesh.ai_step")
 
@@ -70,6 +72,22 @@ def run_ai_analysis(incident_id: str, incident_data: dict) -> dict:
             tokens_total=result.tokens_used,
         )
         db.add(trace)
+
+        # Emit AI analysis completed event
+        emit_event(
+            db=db,
+            incident_id=incident_id,
+            event_type=EventType.AI_ANALYSIS_COMPLETED,
+            summary=f"AI analysis done ({result.root_cause_confidence:.0%})",
+            actor="worker",
+            metadata={
+                "model": result.model,
+                "confidence": result.root_cause_confidence,
+                "actions_count": len(result.suggested_actions),
+                "latency_ms": result.latency_ms,
+            },
+        )
+
         db.commit()
 
         logger.info(
