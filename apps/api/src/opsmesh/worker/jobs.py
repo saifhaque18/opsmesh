@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from src.opsmesh.core.sync_database import get_sync_db
 from src.opsmesh.models.incident import Incident
 from src.opsmesh.services.scoring.history import record_score
+from src.opsmesh.worker.ai_step import run_ai_analysis
 from src.opsmesh.worker.dedup_step import dedup_and_cluster
 from src.opsmesh.worker.pipeline import (
     compute_fingerprint,
@@ -98,6 +99,18 @@ def process_incident(incident_id: str) -> dict:
             fingerprint=incident_data.get("fingerprint", ""),
         )
 
+        # Add dedup context to incident data for AI analysis
+        incident_data["is_duplicate"] = dedup_result.get("is_duplicate", False)
+        incident_data["_cluster_incident_count"] = dedup_result.get(
+            "cluster_incident_count", 1
+        )
+
+        # Run AI analysis (uses its own DB session)
+        ai_result = run_ai_analysis(
+            incident_id=str(incident.id),
+            incident_data=incident_data,
+        )
+
         # Mark as completed
         incident = db.query(Incident).filter(Incident.id == incident_id).first()
         incident.processing_status = "completed"
@@ -111,6 +124,7 @@ def process_incident(incident_id: str) -> dict:
             "category": incident_data.get("_category"),
             "score_explanation": incident_data.get("_score_explanation"),
             "dedup": dedup_result,
+            "ai_analysis": ai_result,
             "processed_at": datetime.now(UTC).isoformat(),
         }
 

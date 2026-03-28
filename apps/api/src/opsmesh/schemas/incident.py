@@ -152,3 +152,25 @@ class ScoreHistoryListResponse(BaseModel):
     incident_id: uuid.UUID
     entries: list[ScoreHistoryEntry]
     total: int
+
+
+# ─── AI Analysis schemas ──────────────────────────
+
+
+class AIAnalysisResponse(BaseModel):
+    """AI analysis results for an incident."""
+
+    root_cause: dict | None
+    suggested_actions: list[dict] | None
+    ai_reviewed: bool
+    trace: dict | None = None
+
+
+class AIReviewRequest(BaseModel):
+    """Human review of AI suggestions."""
+
+    rating: str = Field(..., pattern="^(accepted|rejected|edited)$")
+    feedback: str | None = Field(None, max_length=2000)
+    reviewed_by: str = Field(..., min_length=1, max_length=200)
+    edited_root_cause: str | None = None
+    edited_actions: list[dict] | None = None

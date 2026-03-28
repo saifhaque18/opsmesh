@@ -5,9 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.opsmesh.core.database import get_db
+from src.opsmesh.models.ai_trace import AITrace
 from src.opsmesh.models.incident import IncidentSeverity, IncidentStatus
 from src.opsmesh.models.score_history import ScoreHistory
 from src.opsmesh.schemas.incident import (
+    AIAnalysisResponse,
+    AIReviewRequest,
     IncidentCreate,
     IncidentListResponse,
     IncidentResponse,
@@ -279,3 +282,123 @@ async def get_scoring_explanation(incident_id: uuid.UUID, db: DB):
             for r in result.rules
         ],
     )
+
+
+@router.get("/{incident_id}/ai-analysis", response_model=AIAnalysisResponse)
+async def get_ai_analysis(incident_id: uuid.UUID, db: DB):
+    """Get AI analysis results for an incident."""
+    import json
+
+    from sqlalchemy import select
+
+    from src.opsmesh.models.incident import Incident
+
+    # Get the incident
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    root_cause = None
+    if incident.ai_root_cause:
+        try:
+            root_cause = json.loads(incident.ai_root_cause)
+        except json.JSONDecodeError:
+            root_cause = {"summary": incident.ai_root_cause}
+
+    actions = None
+    if incident.ai_suggested_actions:
+        try:
+            actions = json.loads(incident.ai_suggested_actions)
+        except json.JSONDecodeError:
+            actions = []
+
+    # Get latest trace
+    from sqlalchemy import select as sql_select
+
+    trace_result = await db.execute(
+        sql_select(AITrace)
+        .where(AITrace.incident_id == incident_id)
+        .order_by(AITrace.created_at.desc())
+        .limit(1)
+    )
+    trace = trace_result.scalar_one_or_none()
+
+    trace_data = None
+    if trace:
+        trace_data = {
+            "model": trace.model,
+            "confidence": trace.confidence,
+            "latency_ms": trace.latency_ms,
+            "tokens_total": trace.tokens_total,
+            "human_rating": trace.human_rating,
+            "created_at": trace.created_at.isoformat(),
+        }
+
+    return AIAnalysisResponse(
+        root_cause=root_cause,
+        suggested_actions=actions,
+        ai_reviewed=incident.ai_reviewed,
+        trace=trace_data,
+    )
+
+
+@router.post("/{incident_id}/ai-review")
+async def review_ai_analysis(
+    incident_id: uuid.UUID, review: AIReviewRequest, db: DB
+):
+    """Submit a human review of AI suggestions."""
+    import json
+
+    from sqlalchemy import select
+
+    from src.opsmesh.models.incident import Incident
+
+    # Get the incident
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Mark as reviewed
+    incident.ai_reviewed = True
+
+    # Apply edits if provided
+    if review.rating == "edited":
+        if review.edited_root_cause:
+            try:
+                existing = json.loads(incident.ai_root_cause or "{}")
+            except json.JSONDecodeError:
+                existing = {}
+            existing["summary"] = review.edited_root_cause
+            existing["human_edited"] = True
+            incident.ai_root_cause = json.dumps(existing)
+
+        if review.edited_actions:
+            incident.ai_suggested_actions = json.dumps(review.edited_actions)
+
+    # Update the latest trace with review
+    from src.opsmesh.core.sync_database import get_sync_db
+
+    sync_db = get_sync_db()
+    try:
+        trace = (
+            sync_db.query(AITrace)
+            .filter(AITrace.incident_id == incident_id)
+            .order_by(AITrace.created_at.desc())
+            .first()
+        )
+        if trace:
+            trace.human_rating = review.rating
+            trace.human_feedback = review.feedback
+            sync_db.commit()
+    finally:
+        sync_db.close()
+
+    await db.commit()
+
+    return {
+        "status": "reviewed",
+        "rating": review.rating,
+        "reviewed_by": review.reviewed_by,
+    }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, Fragment } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchIncidents, type Incident, type IncidentFilters } from "@/lib/api";
@@ -8,9 +9,9 @@ import { SeverityBadge } from "./severity-badge";
 import { StatusBadge } from "./status-badge";
 import { ProcessingBadge } from "./processing-badge";
 import { DuplicateBadge } from "./duplicate-badge";
-import ScoringPanel from "./scoring-panel";
 
 export function IncidentTable() {
+  const router = useRouter();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -19,7 +20,6 @@ export function IncidentTable() {
     page: 1,
     page_size: 15,
   });
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadIncidents = useCallback(async () => {
     setLoading(true);
@@ -127,14 +127,10 @@ export function IncidentTable() {
               </tr>
             ) : (
               incidents.map((incident) => (
-                <Fragment key={incident.id}>
                   <tr
-                    onClick={() =>
-                      setExpandedId(expandedId === incident.id ? null : incident.id)
-                    }
-                    className={`cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
-                      expandedId === incident.id ? "bg-blue-50 dark:bg-blue-900/20" : ""
-                    }`}
+                    key={incident.id}
+                    onClick={() => router.push(`/incidents/${incident.id}`)}
+                    className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
                   >
                     <td className="max-w-xs px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -179,18 +175,6 @@ export function IncidentTable() {
                         : "—"}
                     </td>
                   </tr>
-                  {expandedId === incident.id && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-4 bg-gray-50 dark:bg-gray-800/30">
-                        <ScoringPanel
-                          incidentId={incident.id}
-                          currentScore={incident.severity_score}
-                          onScoreUpdated={loadIncidents}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
               ))
             )}
           </tbody>

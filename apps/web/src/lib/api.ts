@@ -229,4 +229,62 @@ export async function overrideSeverity(
   return data;
 }
 
+// AI Analysis types
+export interface AIRootCause {
+  summary: string;
+  confidence: number;
+  contributing_factors: string[];
+  category: string;
+  severity_assessment: string;
+  escalation_needed: boolean;
+  related_systems: string[];
+  prevention_recommendations: string[];
+  human_edited?: boolean;
+}
+
+export interface AISuggestedAction {
+  step: number;
+  action: string;
+  priority: string;
+  estimated_time: string;
+  rationale?: string;
+}
+
+export interface AITrace {
+  model: string;
+  confidence: number;
+  latency_ms: number;
+  tokens_total: number;
+  human_rating: string | null;
+  created_at: string;
+}
+
+export interface AIAnalysis {
+  root_cause: AIRootCause | null;
+  suggested_actions: AISuggestedAction[] | null;
+  ai_reviewed: boolean;
+  trace: AITrace | null;
+}
+
+export interface AIReviewRequest {
+  rating: "accepted" | "rejected" | "edited";
+  feedback?: string;
+  reviewed_by: string;
+  edited_root_cause?: string;
+  edited_actions?: AISuggestedAction[];
+}
+
+// AI Analysis API functions
+export async function fetchAIAnalysis(incidentId: string): Promise<AIAnalysis> {
+  const { data } = await api.get(`/api/v1/incidents/${incidentId}/ai-analysis`);
+  return data;
+}
+
+export async function submitAIReview(
+  incidentId: string,
+  review: AIReviewRequest
+): Promise<void> {
+  await api.post(`/api/v1/incidents/${incidentId}/ai-review`, review);
+}
+
 export default api;
