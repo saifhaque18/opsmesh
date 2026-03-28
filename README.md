@@ -77,18 +77,18 @@ Modern operations teams are overwhelmed by alert noise. OpsMesh reduces cognitiv
 ## Key Features
 
 ### v1 (Current Focus)
-- [ ] Incident ingestion API
-- [ ] Dashboard with incident list
+- [x] Incident ingestion API
+- [x] Dashboard with incident list
 - [ ] Deduplication and clustering
 - [ ] Severity scoring engine
 - [ ] AI-generated response suggestions
 - [ ] Incident timeline
-- [ ] Search and filtering
+- [x] Search and filtering
 - [ ] Basic authentication
 - [ ] Audit logging
-- [ ] Dockerized local development
-- [ ] Test suite
-- [ ] CI/CD pipeline
+- [x] Dockerized local development
+- [x] Test suite
+- [x] CI/CD pipeline
 
 ### v2 (Planned)
 - [ ] Slack/email alerting
@@ -113,7 +113,7 @@ Modern operations teams are overwhelmed by alert noise. OpsMesh reduces cognitiv
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/opsmesh.git
+git clone https://github.com/saifhaque18/opsmesh.git
 cd opsmesh
 
 # Start infrastructure (Postgres + Redis)
@@ -244,6 +244,6 @@ MIT
 
 ## Author
 
-Built by [Your Name] — AI Systems / Platform Engineer
+Built by **Saiful Haque Saif** — AI Systems / Platform Engineer
 
 *Demonstrating production-grade backend engineering, event-driven architecture, and AI integration.*
